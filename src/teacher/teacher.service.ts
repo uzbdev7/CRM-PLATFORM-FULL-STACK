@@ -113,12 +113,50 @@ export class TeacherService {
     });
   }
 
-  async getAllTeachers(){
-    const teachers = await this.prisma.teacher.findMany()
+  async getAllTeachers() {
+    const teachers = await this.prisma.teacher.findMany({
+      select:{
+        id:true,
+        fullName:true,
+        email:true,
+        experience:true,
+        position:true,
+        status:true,
+        groups:{
+            select:{
+              id:true,
+              userId:true,
+              roomId:true,
+              startDate:true,
+              startTime:true,
+              weeKDays:true,
+              status:true,
+              course:{
+                select:{
+                  id:true,
+                  name:true,
+                  status:true,
+                  durationMonth:true,
+                  durationLesson:true,
+                }
+              },
+                room:{
+                  select:{
+                    id:true,
+                    name:true,
+                    capacity:true,
+                    status:true
+                  }
+                }
+            } 
+          }  
+        }
+      
+    });
     return {
-      success:true,
-      data:teachers
-    }
+      success: true,
+      data: teachers
+    };
   }
 
   async getById(id:number){

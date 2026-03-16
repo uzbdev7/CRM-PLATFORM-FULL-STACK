@@ -39,46 +39,46 @@ export class StudentService {
     }
 
   // homework.service.ts
-  async findStudentHomeworks(user: { id: number; role: Role }) {
+   async findStudentHomeworks(user: { id: number; role: Role }) {
 
-    const student = await this.prisma.student.findFirst({
-      where: { id: user.id }
-    })
+      const student = await this.prisma.student.findFirst({
+        where: { id: user.id }
+      })
 
-    if (!student) throw new NotFoundException("Student not found.")
+      if (!student) throw new NotFoundException("Student not found.")
 
-    // StudentGroup orqali student qaysi groupda ekanini top
-    const studentGroups = await this.prisma.studentGroup.findMany({
-      where: { studentId: student.id }
-    })
-    const groupIds = studentGroups.map(sg => sg.groupId)
+      // StudentGroup orqali student qaysi groupda ekanini top
+      const studentGroups = await this.prisma.studentGroup.findMany({
+        where: { studentId: student.id }
+      })
+      const groupIds = studentGroups.map(sg => sg.groupId)
 
-    // O'sha groupdagi lessonlarning homeworklari
-    const homeworks = await this.prisma.homework.findMany({
-      where: {
-        lesson: {
-          groupId: { in: groupIds } 
-        }
-      },
-      orderBy: { created_at: 'asc' },
-      include: {
-        lesson: {
-          select: {
-            id: true,
-            title: true,
-            groupId: true,
-            group: { select: { id: true, name: true, status: true } }
+      // O'sha groupdagi lessonlarning homeworklari
+      const homeworks = await this.prisma.homework.findMany({
+        where: {
+          lesson: {
+            groupId: { in: groupIds } 
           }
         },
-        homeworkResponses: {
-          where: { studentId: student.id },
-          select: { id: true, status: true, file: true }
+        orderBy: { created_at: 'asc' },
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              title: true,
+              groupId: true,
+              group: { select: { id: true, name: true, status: true } }
+            }
+          },
+          homeworkResponses: {
+            where: { studentId: student.id },
+            select: { id: true, status: true, file: true }
+          }
         }
-      }
-    })
+      })
 
-    return { success: true, data: homeworks }
-  }
+      return { success: true, data: homeworks }
+   }
 
    async login(dto: LoginStudentDto, res: Response) {
      const user = await this.prisma.student.findUnique({
@@ -116,7 +116,9 @@ export class StudentService {
    }
 
    async getAllStudents(){
-    const students = await this.prisma.student.findMany()
+    const students = await this.prisma.student.findMany({
+      orderBy: { created_at: 'asc' },
+    })
     return {
       success:true,
       data:students
@@ -136,7 +138,7 @@ export class StudentService {
       }
    }
 
-  async updateStudentById(id: number, payload: UpdateStudentDto, photo?: Express.Multer.File) {
+   async updateStudentById(id: number, payload: UpdateStudentDto, photo?: Express.Multer.File) {
 
     const teacher = await this.prisma.student.findUnique({
       where: { id }
@@ -190,7 +192,7 @@ export class StudentService {
       data: withoutPassword,
       message: "Student's information has been updated."
     };
-  }
+   }
  
   async deleteStudent(id:number){
     const exists = await this.prisma.student.findUnique({where:{id}})

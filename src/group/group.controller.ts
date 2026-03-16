@@ -20,7 +20,7 @@ export class GroupController {
   @Roles(Role.ADMIN, Role.SUPERADMIN, Role.ADMINISTRATOR)
   @Post("create")
   createCourse(@Body() payload: CreateGroupDto, @CurrentUser() user) {
-    return this.groupService.createGroup(payload, user.sub);
+    return this.groupService.createGroup(payload, user.id);
   }
 
   @ApiOperation({summary:"HAMMA UCHUN"})

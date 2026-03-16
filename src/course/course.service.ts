@@ -31,7 +31,8 @@ export class CourseService {
 
   async getAllCourses(status?: Status) {
   const courses = await this.prisma.course.findMany({
-    where: status ? { status } : {}
+    where: status ? { status } : {},
+    include:{groups:true}
   });
 
     return {

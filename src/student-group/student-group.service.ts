@@ -50,6 +50,21 @@ export class StudentGroupService {
   async getAllStudentGroupByStatus(status?: Status) {
     const studentGroup = await this.prisma.studentGroup.findMany({
       where: status ? { status } : {},
+      select:{
+        student:{
+          select:{
+            id:true,
+            fullName:true,
+            status:true
+          }
+        },
+        group:{
+          select:{
+            id:true,
+            name:true
+          }
+        }
+      }
     });
 
     return {

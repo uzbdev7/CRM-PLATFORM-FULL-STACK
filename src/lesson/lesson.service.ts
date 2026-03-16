@@ -58,51 +58,60 @@ export class LessonService {
     };
   }
 
-async findOne(id: number, user: { id: number; role: Role }) {
-  const lesson = await this.prisma.lesson.findUnique({
-    where: { id },
-    include: {
-      group: {
-        select: { id: true, name: true, status: true }
-      },
-      attendances: true,
-      homework: true,
-      lessonVideos: true,
-      ratings: true,
-    }
-  })
-  if (!lesson) throw new NotFoundException('Lesson not found.')
-
-  if (user.role === Role.STUDENT) {
-    const student = await this.prisma.student.findFirst({
-      where: { id: user.id }
-    })
-    if (!student) throw new NotFoundException('Student not found.')
-
-    const studentGroup = await this.prisma.studentGroup.findFirst({
-      where: { studentId: student.id, groupId: lesson.groupId }
-    })
-    if (!studentGroup) throw new ForbiddenException('Bu guruh sizga tegishli emas.')
-
-    // Rating bormi?
-    const rating = await this.prisma.rating.findFirst({
-      where: { lessonId: id, studentId: student.id }
+  async findOne(id: number, user: { id: number; role: Role }) {
+    const lesson = await this.prisma.lesson.findUnique({
+      where: { id },
+      include: {
+        group: {
+          select: { id: true, name: true, status: true }
+        },
+        attendances: {
+          orderBy: { created_at: 'asc' }
+        },
+        homework: {
+          orderBy: { created_at: 'asc' }
+        },
+        lessonVideos: {
+          orderBy: { created_at: 'asc' }
+        },
+        ratings: {
+          orderBy: { created_at: 'asc' }
+        },
+      }
     })
 
-    return {
-      success: true,
-      data: {
-        ...lesson,
-        homework: rating ? lesson.homework : [],      // ← rating bo'lsa ko'rsin
-        lessonVideos: rating ? lesson.lessonVideos : [], // ← rating bo'lsa ko'rsin
-        isRated: !!rating  // ← frontend uchun
+    if (!lesson) throw new NotFoundException('Lesson not found.')
+
+    if (user.role === Role.STUDENT) {
+      const student = await this.prisma.student.findFirst({
+        where: { id: user.id }
+      })
+
+      if (!student) throw new NotFoundException('Student not found.')
+
+      const studentGroup = await this.prisma.studentGroup.findFirst({
+        where: { studentId: student.id, groupId: lesson.groupId }
+      })
+
+      if (!studentGroup) throw new ForbiddenException('Bu guruh sizga tegishli emas.')
+
+      const rating = await this.prisma.rating.findFirst({
+        where: { lessonId: id, studentId: student.id }
+      })
+
+      return {
+        success: true,
+        data: {
+          ...lesson,
+          homework: rating ? lesson.homework : [],
+          lessonVideos: rating ? lesson.lessonVideos : [],
+          isRated: !!rating
+        }
       }
     }
-  }
 
-  // Admin, Teacher, Superadmin → hamma narsani ko'radi
-  return { success: true, data: lesson }
-}
+    return { success: true, data: lesson }
+  } 
 
   async update(user:{id:number, role:Role} ,id:number, payload: UpdateLessonDto) {
 

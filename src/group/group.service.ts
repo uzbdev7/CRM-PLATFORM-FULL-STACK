@@ -59,9 +59,40 @@ export class GroupService {
   }
 
   async getAllGroups(status?: Status) {
-  const courses = await this.prisma.group.findMany({
-    where: status ? { status } : {}
-  });
+      const courses = await this.prisma.group.findMany({
+      where: status ? { status } : {},
+      select: {
+        id:true,
+        name:true,
+        startTime: true,
+
+        room: {
+          select: {
+            name: true
+          }
+        },
+
+        course: {
+          select: {
+            id: true,
+            name: true,
+            durationLesson: true
+          }
+        },
+
+        teacher: {
+          select: {
+            fullName: true
+          }
+        },
+
+        user: {
+          select: {
+            fullName: true
+          }
+        }
+      }
+    });
 
     return {
       success: true,
