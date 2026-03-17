@@ -65,6 +65,7 @@ export class GroupService {
         id:true,
         name:true,
         startTime: true,
+        startDate:true,
 
         room: {
           select: {
@@ -76,7 +77,8 @@ export class GroupService {
           select: {
             id: true,
             name: true,
-            durationLesson: true
+            durationLesson: true,
+            durationMonth:true
           }
         },
 

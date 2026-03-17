@@ -61,7 +61,32 @@ async register(dto: CreateUserDto, photo?: Express.Multer.File) {
       maxAge: 8 * 60 * 60 * 1000,
     });
 
-    return res.json({ message: 'Login muvaffaqiyatli', userId: user.id,role:user.role, token });
+    return res.json({ message: 'Login muvaffaqiyatli',
+      userId: user.id, 
+      role:user.role, 
+      fullName:user.fullName,
+      token
+     });
+  }
+
+  async getAll() {
+    const users = await this.prisma.user.findMany({
+      orderBy: { created_at: 'asc' },
+      select: {
+        id:         true,
+        fullName:   true,
+        email:      true,
+        role:       true,
+        photo:      true,
+        hire_date:  true,
+        created_at: true,
+      },
+    });
+ 
+    return {
+      success:true,
+      data:users
+    };
   }
 
   // LOGOUT

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res, UseGuards, HttpCode, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Body, Res, UseGuards, HttpCode, HttpStatus, UseInterceptors, UploadedFile, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiCookieAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/CreateUser.dto';
@@ -42,6 +42,16 @@ export class UsersController {
     return this.usersService.login(dto, res);
   }
 
+
+  @ApiCookieAuth('access_token')
+  @ApiOperation({ summary: 'SUPERADMIN' })
+   @UseGuards(JwtAuthGuard,RoleGuard)
+   @Roles(Role.SUPERADMIN)
+   @HttpCode(HttpStatus.OK)
+  @Get('getAll')
+  getAll() {
+    return this.usersService.getAll();
+  }
 
   @ApiOperation({ summary: 'Tizimdan chiqish' })
   @ApiResponse({ status: 200, description: 'Muvaffaqiyatli chiqildi' })
