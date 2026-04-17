@@ -3,13 +3,13 @@ import { HomeworkResponseService } from './homework-response.service';
 import { CreateHomeworkResponseDto } from './dto/create-homework-response.dto';
 import { UpdateHomeworkResponseDto } from './dto/update-homework-response.dto';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Role } from '@prisma/client';
-import { Roles } from 'src/auth/decorators/roles.decorator';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { homeworkResponseOptions } from 'src/config/multer.config';
+import { homeworkResponseOptions } from '../config/multer.config';
 
 @ApiTags('HomeworkResponse')
 @ApiCookieAuth("access_token")
@@ -87,5 +87,16 @@ export class HomeworkResponseController {
     @CurrentUser() user: { id: number; role: Role }
   ) {
     return this.homeworkResponseService.findMissedStudents(id, user)
+  }
+
+  @ApiOperation({summary:" TEACHER | ADMIN | SUPERADMIN | ADMINISTRATOR"})
+  @UseGuards(JwtAuthGuard, RoleGuard)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Get('homework/:homeworkId')
+  findResponsesByHomework(
+    @Param('homeworkId', ParseIntPipe) homeworkId: number,
+    @CurrentUser() user: { id: number; role: Role }
+  ) {
+    return this.homeworkResponseService.findResponsesByHomework(homeworkId, user)
   }
 }

@@ -16,13 +16,13 @@ import { HomeworkResultService } from './homework-result.service';
 import { CreateHomeworkResultDto } from './dto/create-homework-result.dto';
 import { UpdateHomeworkResultDto } from './dto/update-homework-result.dto';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { HomeworkStatus, Role } from '@prisma/client';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
-import { homeworkResultOptions } from 'src/config/multer.config';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { homeworkResultOptions } from '../config/multer.config';
 
 @ApiTags('HomeworkResult')
 @ApiCookieAuth("access_token")

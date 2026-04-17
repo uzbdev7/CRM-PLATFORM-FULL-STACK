@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { CreateHomeworkResultDto } from './dto/create-homework-result.dto';
 import { UpdateHomeworkResultDto } from './dto/update-homework-result.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { HomeworkStatus, Role } from '@prisma/client';
 
 @Injectable()

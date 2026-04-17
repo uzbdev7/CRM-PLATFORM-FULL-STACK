@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { CreateStudentGroupDto } from './dto/create-student-group.dto';
 import { UpdateStudentGroupDto } from './dto/update-student-group.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { Status } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class StudentGroupService {
@@ -50,20 +50,63 @@ export class StudentGroupService {
   async getAllStudentGroupByStatus(status?: Status) {
     const studentGroup = await this.prisma.studentGroup.findMany({
       where: status ? { status } : {},
-      select:{
-        student:{
-          select:{
-            id:true,
-            fullName:true,
-            status:true
+      select: {
+        id: true,
+        status: true,
+        created_at: true,
+        studentId: true,
+        groupId: true,
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            status: true,
+            email: true,
           }
         },
-        group:{
-          select:{
-            id:true,
-            name:true
+        group: {
+          select: {
+            id: true,
+            name: true,
+            startDate: true,
+            startTime: true,
+            weeKDays: true,
+            status: true,
+            course: {
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                durationMonth: true,
+                durationLesson: true,
+              }
+            },
+            room: {
+              select: {
+                id: true,
+                name: true,
+                capacity: true,
+              }
+            },
+            teacher: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                position: true,
+              }
+            },
+            _count: {
+              select: {
+                studentGroups: true,
+                lessons: true,
+              }
+            }
           }
         }
+      },
+      orderBy: {
+        created_at: 'asc'
       }
     });
 

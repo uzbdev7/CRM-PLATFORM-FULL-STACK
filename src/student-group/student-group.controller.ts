@@ -13,11 +13,11 @@ import {
 import { StudentGroupService } from './student-group.service';
 import { CreateStudentGroupDto } from './dto/create-student-group.dto';
 import { UpdateStudentGroupDto } from './dto/update-student-group.dto';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role, Status } from '@prisma/client';
 import { ApiCookieAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
 
 @ApiTags("Studet-Group")
 @ApiCookieAuth("access_token")
@@ -34,9 +34,10 @@ export class StudentGroupController {
   }
 
   @Get('all/status')
-  @ApiOperation({ summary: 'ADMIN | SUPERADMIN | ADMINISTRATOR' })
+  // [O'ZGARTIRISH]: O'qituvchilar va o'quvchilarga guruhlarni olish ehtiyoji borligi uchun TEACHER va STUDENT rollari qo'shildi
+  @ApiOperation({ summary: 'ADMIN | SUPERADMIN | ADMINISTRATOR | TEACHER | STUDENT' })
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN, Role.ADMINISTRATOR)
+  @Roles(Role.ADMIN, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.TEACHER, Role.STUDENT)
   @ApiQuery({
     name: 'status',
     required: false,
@@ -47,9 +48,10 @@ export class StudentGroupController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'ADMIN | SUPERADMIN | ADMINISTRATOR' })
+  // [O'ZGARTIRISH]: Bitta guruhni malumotlarini korish uchun TEACHER va STUDENT ruxsati qoshildi
+  @ApiOperation({ summary: 'ADMIN | SUPERADMIN | ADMINISTRATOR | TEACHER | STUDENT' })
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.SUPERADMIN, Role.ADMINISTRATOR)
+  @Roles(Role.ADMIN, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.TEACHER, Role.STUDENT)
   findOne(@Param('id', ParseIntPipe) id:number) {
     return this.studentGroupService.getById(id);
   }

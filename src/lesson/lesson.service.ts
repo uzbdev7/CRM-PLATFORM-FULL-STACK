@@ -3,10 +3,11 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -28,7 +29,7 @@ export class LessonService {
 
     if (!exist) throw new NotFoundException('Group Id not found');
 
-    await this.prisma.lesson.create({
+    const lesson = await this.prisma.lesson.create({
       data: {
         ...payload,
         teacherId: user.role === Role.TEACHER ? user.id : null,
@@ -44,18 +45,48 @@ export class LessonService {
     return {
       success: true,
       message: 'Lesson created successfully.',
+      data: lesson,
     };
   }
 
   async findAll() {
-    const lessons = await this.prisma.lesson.findMany({
-      orderBy: { created_at: 'asc' }
-    });
+    try {
+      const lessons = await this.prisma.lesson.findMany({
+        orderBy: { created_at: 'asc' }
+      });
 
-    return {
-      success: true,
-      data: lessons,
-    };
+      return {
+        success: true,
+        data: lessons,
+      };
+    } catch (error) {
+      const msg = String((error as { message?: string })?.message || '').toLowerCase();
+      const isTransientDbError =
+        msg.includes('connection terminated unexpectedly') ||
+        msg.includes('can\'t reach database server') ||
+        msg.includes('ecconnreset') ||
+        msg.includes('econnreset');
+
+      if (isTransientDbError) {
+        try {
+          await this.prisma.$connect();
+          const retryLessons = await this.prisma.lesson.findMany({
+            orderBy: { created_at: 'asc' }
+          });
+
+          return {
+            success: true,
+            data: retryLessons,
+          };
+        } catch {
+          throw new ServiceUnavailableException(
+            "Database bilan aloqa uzildi. Qayta urinib ko'ring.",
+          );
+        }
+      }
+
+      throw error;
+    }
   }
 
   async findOne(id: number, user: { id: number; role: Role }) {
@@ -142,16 +173,42 @@ export class LessonService {
     };
   }
 
-  async remove(id: number) {
-    const exist = await this.prisma.lesson.findUnique({
-      where: { id },
-    });
-
+  async remove(user:{id:number, role:Role}, id: number) {
+    const exist = await this.prisma.lesson.findUnique({ where: { id } });
     if (!exist) throw new NotFoundException('Lesson Id not found.');
 
-    return {
-      success: true,
-      message: "Lesson's information has been deleted.",
-    };
+    if (user.role === Role.TEACHER && Number(exist.teacherId) !== Number(user.id)) {
+      throw new ForbiddenException("Siz faqat o'zingiz yaratgan darsni o'chira olasiz.");
+    }
+
+    // 1. Bu darsga tegishli homework ID larini olamiz
+    const homeworks = await this.prisma.homework.findMany({
+      where: { lessonId: id },
+      select: { id: true },
+    });
+    const homeworkIds = homeworks.map((h) => h.id);
+
+    // 2. HomeworkResponse va HomeworkResult ni o'chiramiz
+    if (homeworkIds.length > 0) {
+      await this.prisma.homeworkResponse.deleteMany({
+        where: { homeworkId: { in: homeworkIds } },
+      });
+      await this.prisma.homeworkResult.deleteMany({
+        where: { homeworkId: { in: homeworkIds } },
+      });
+      await this.prisma.homework.deleteMany({
+        where: { id: { in: homeworkIds } },
+      });
+    }
+
+    // 3. Davomat, video va reytinglarni o'chiramiz
+    await this.prisma.attendance.deleteMany({ where: { lessonId: id } });
+    await this.prisma.lessonVideo.deleteMany({ where: { lessonId: id } });
+    await this.prisma.rating.deleteMany({ where: { lessonId: id } });
+
+    // 4. Nihoyat darsni o'chiramiz
+    await this.prisma.lesson.delete({ where: { id } });
+
+    return { success: true, message: "Lesson's information has been deleted." };
   }
 }

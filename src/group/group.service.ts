@@ -1,8 +1,8 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { Status } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class GroupService {
@@ -63,9 +63,12 @@ export class GroupService {
       where: status ? { status } : {},
       select: {
         id:true,
+        teacherId: true,
         name:true,
         startTime: true,
         startDate:true,
+        weeKDays: true,
+        status: true,
 
         room: {
           select: {
@@ -78,13 +81,21 @@ export class GroupService {
             id: true,
             name: true,
             durationLesson: true,
-            durationMonth:true
+            durationMonth:true,
+            price: true
           }
         },
 
         teacher: {
           select: {
+            id: true,
             fullName: true
+          }
+        },
+
+        studentGroups: {
+          select: {
+            id: true
           }
         },
 
@@ -109,7 +120,8 @@ export class GroupService {
         teacher:{
           select:{
             id:true,
-            fullName:true
+            fullName:true,
+            email: true
           }
         },
         user:{
@@ -122,10 +134,25 @@ export class GroupService {
           select:{
             id:true,
             name:true,
-            status:true
+            status:true,
+            durationLesson: true,
+            durationMonth: true,
+            price: true
           }
         },
         room:true,
+        studentGroups: {
+          include: {
+            student: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                status: true
+              }
+            }
+          }
+        }
       }
     })
 

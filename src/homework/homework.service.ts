@@ -1,7 +1,7 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateHomeworkDto } from './dto/create-homework.dto';
 import { UpdateHomeworkDto } from './dto/update-homework.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -13,13 +13,32 @@ export class HomeworkService {
     file: Express.Multer.File,
     user: { id: number; role: Role }
   ) {
+    const lessonId = Number(createHomeworkDto?.lessonId);
+    if (!Number.isInteger(lessonId) || lessonId <= 0) {
+      throw new BadRequestException("lessonId majburiy va to'g'ri son bo'lishi kerak.");
+    }
+
     const lesson = await this.prisma.lesson.findUnique({
-      where: { id: createHomeworkDto.lessonId }
+      where: { id: lessonId }
     })
     if (!lesson) throw new NotFoundException("Lesson not found.")
 
+    if (user.role === Role.TEACHER) {
+      const teacherGroup = await this.prisma.group.findFirst({
+        where: { id: lesson.groupId, teacherId: user.id }
+      })
+      if (!teacherGroup) throw new ForbiddenException("Bu guruh sizga tegishli emas.")
+    }
+
+    const attendanceExists = await this.prisma.attendance.findFirst({
+      where: { lessonId }
+    })
+    if (!attendanceExists) {
+      throw new BadRequestException("Avval darsga yo'qlama qiling, keyin uyga vazifa qo'shing.")
+    }
+
     const existing = await this.prisma.homework.findFirst({
-    where: { lessonId: createHomeworkDto.lessonId }
+    where: { lessonId }
   })
     if (existing) throw new ConflictException("Bu lesson uchun homework allaqachon mavjud.")
 

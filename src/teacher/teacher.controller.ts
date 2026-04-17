@@ -1,17 +1,17 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Res, UseGuards, UseInterceptors, UploadedFile, Request, Get, ParseIntPipe, Param, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Res, UseGuards, UseInterceptors, UploadedFile, Request, Get, ParseIntPipe, Param, Patch, Delete, ForbiddenException } from '@nestjs/common';
 import { TeacherService } from './teacher.service';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { LoginTeacherDto } from './dto/LoginTeacher.dto';
 import type { Response } from 'express';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { multerOptions } from 'src/config/multer.config';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { multerOptions } from '../config/multer.config';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Teacher')
 @ApiCookieAuth("access_token")
@@ -63,22 +63,26 @@ export class TeacherController {
   }
 
   // GET TEACHER BY ID
-  @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT"})
+  @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT | TEACHER (own data)"})
   @ApiResponse({ status: 200, description: 'Bitta teacher ma\'lumotlari.' })
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR)
+  @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.TEACHER)
   @Get(":id")
   getById(
     @Param('id', ParseIntPipe) id:number,
+    @CurrentUser() user: { id: number; role: Role },
   ){
-
+    // Teachers can only read their own data
+    if (user.role === Role.TEACHER && user.id !== id) {
+      throw new ForbiddenException('Faqat o\'z profilingizni ko\'rishingiz mumkin');
+    }
     return this.teacherService.getById(id)
   }
 
   // UPDATE TEACHER BY ID SUPERADMIN ...
   @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT"})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR)
+  @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.TEACHER)
   @Patch('update/:id')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -98,9 +102,10 @@ export class TeacherController {
   updateTeacherById(
     @Param('id', ParseIntPipe) id:number,
     @Body() payload:UpdateTeacherDto,
+    @CurrentUser() user: { id: number; role: Role },
     @UploadedFile() photo?: Express.Multer.File
   ){
-    return this.teacherService.updateTeacherById(id, payload, photo)
+    return this.teacherService.updateTeacherById(id, payload, photo, user)
   }
 
   // TEACHER DELETE 

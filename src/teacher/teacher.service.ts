@@ -1,5 +1,4 @@
 import { ConflictException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginTeacherDto } from './dto/LoginTeacher.dto';
 import * as bcrypt from 'bcrypt';
 import { Response } from 'express';
@@ -7,8 +6,9 @@ import { JwtService } from '@nestjs/jwt';
 import { MailerService } from '@nestjs-modules/mailer';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { Role } from '@prisma/client';
-import { sendWelcomeMail } from 'src/helpers/mail.helper';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import { sendWelcomeMail } from '../helpers/mail.helper';
 
 
 @Injectable()
@@ -24,20 +24,27 @@ export class TeacherService {
     const hashedPassword = await bcrypt.hash(dto.password, 10)
     const photoPath = photo ? `/uploads/photos/${photo.filename}` : null
 
-    const teacher = await this.prisma.teacher.create({
-      data:{
-        fullName:dto.fullName,
-        email: dto.email,
-        password: hashedPassword,
-        experience: dto.experience,
-        position: dto.position,
-        photo: photoPath,
-      },
-    });
+    try {
+      const teacher = await this.prisma.teacher.create({
+        data:{
+          fullName:dto.fullName,
+          email: dto.email,
+          password: hashedPassword,
+          experience: dto.experience,
+          position: dto.position,
+          photo: photoPath,
+        },
+      });
 
-     await sendWelcomeMail(this.mailerService, dto.email, dto.fullName, dto.password);
+       await sendWelcomeMail(this.mailerService, dto.email, dto.fullName, dto.password);
 
-    return { message: 'Teacher yaratildi', teacherId: teacher.id };
+      return { message: 'Teacher yaratildi', teacherId: teacher.id };
+    } catch (error: any) {
+      if (error?.code === 'P2002' && error?.meta?.target?.includes('email')) {
+        throw new ConflictException(`Bu email manzili allaqachon ro'yxatdan o'tgan: ${dto.email}`);
+      }
+      throw error;
+    }
   }
 
   async findTeacherHomeworks(user: { id: number; role: Role }) {
@@ -58,11 +65,24 @@ export class TeacherService {
           group: { select: { id: true, name: true, status: true } }
         }
       },
+      homeworkResponses: {
+        select: {
+          id: true,
+          studentId: true,
+          file: true,
+          status: true,
+          created_at: true,
+          student: {
+            select: { id: true, fullName: true, photo: true }
+          }
+        }
+      },
       homeworkResults: {
         select: {
           id: true,
           score: true,
           status: true,
+          studentId: true,
           student: {
             select: { id: true, fullName: true }
           }
@@ -79,10 +99,40 @@ export class TeacherService {
       where: { email: dto.email },
     });
 
-    if (!user) throw new UnauthorizedException('Email yoki parol xato');
+    if (!user) {
+      console.log(`[TEACHER LOGIN XATOSI] '${dto.email}' bunday email bazada umuman yo'q! Jadval bo'sh bo'lishi ham mumkin.`);
+      throw new UnauthorizedException('Email yoki parol xato');
+    }
 
-    const isMatch = await bcrypt.compare(dto.password, user.password);
-    if (!isMatch) throw new UnauthorizedException('Email yoki parol xato');
+    let isMatch = false;
+    const inputPassword = (dto.password || '').trim();
+    const storedPassword = (user.password || '').trim();
+
+    // Legacy tizimlardan kelgan $2y$ bcrypt hashni Node bcrypt uchun $2b$ ga normallashtiramiz.
+    const normalizedHash = storedPassword.startsWith('$2y$')
+      ? `$2b$${storedPassword.slice(4)}`
+      : storedPassword;
+
+    const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(normalizedHash);
+    if (isBcryptHash) {
+      isMatch = await bcrypt.compare(inputPassword, normalizedHash);
+    } else {
+      // Ba'zi eski yozuvlarda parol plain text bo'lishi mumkin.
+      isMatch = inputPassword === storedPassword;
+    }
+    
+    if (!isMatch) {
+      console.log(`[TEACHER LOGIN XATOSI] Email topildi, lekin parol mos kelmadi. email='${dto.email}'`);
+      throw new UnauthorizedException('Email yoki parol xato');
+    }
+
+    // Agar tizimga $2y$ bilan kirilgan bo'lsa, keyingi loginlar uchun hashni $2b$ formatda saqlab qo'yamiz.
+    if (storedPassword.startsWith('$2y$') && isMatch) {
+      await this.prisma.teacher.update({
+        where: { id: user.id },
+        data: { password: normalizedHash },
+      });
+    }
 
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) throw new InternalServerErrorException('JWT secret not configured');
@@ -108,7 +158,8 @@ export class TeacherService {
         email: user.email,
         experience:user.experience,
         position: user.position,
-        photo: user.photo
+        photo: user.photo,
+        role: Role.TEACHER
       },
     });
   }
@@ -121,6 +172,7 @@ export class TeacherService {
         email:true,
         experience:true,
         position:true,
+        photo:true,
         status:true,
         groups:{
             select:{
@@ -172,7 +224,12 @@ export class TeacherService {
     }
   }
 
-  async updateTeacherById(id: number, payload: UpdateTeacherDto, photo?: Express.Multer.File) {
+  async updateTeacherById(
+    id: number,
+    payload: UpdateTeacherDto,
+    photo?: Express.Multer.File,
+    user?: { id: number; role: Role }
+  ) {
 
     const teacher = await this.prisma.teacher.findUnique({
       where: { id }
@@ -181,7 +238,11 @@ export class TeacherService {
 
     if (!teacher) throw new NotFoundException("Teacher not found.");
 
-    const photoPath = photo && photo.originalname ? photo.path : undefined;
+    if (user?.role === Role.TEACHER && Number(user.id) !== Number(id)) {
+      throw new ForbiddenException("Siz faqat o'zingizning ma'lumotlaringizni yangilay olasiz.");
+    }
+
+    const photoPath = photo?.filename ? `/uploads/photos/${photo.filename}` : undefined;
 
     const cleanPayload = Object.fromEntries(
     Object.entries(payload).filter(([_, v]) => 
@@ -229,11 +290,11 @@ export class TeacherService {
   }
 
   async deleteTeacher(id:number){
-    const exists = await this.prisma.student.findUnique({where:{id}})
+    const exists = await this.prisma.teacher.findUnique({where:{id}})
 
     if(!exists) throw new NotFoundException(`Teacher ${id} not found..`)
 
-      await this.prisma.student.delete({where:{id}})
+      await this.prisma.teacher.delete({where:{id}})
       
       return {
         success:true,

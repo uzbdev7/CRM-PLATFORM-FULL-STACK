@@ -3,11 +3,11 @@ import { LessonService } from './lesson.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags("Lessons")
 @Controller('lesson')
@@ -58,9 +58,12 @@ export class LessonController {
   @Delete(':id')
   @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN"})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR,Role.SUPERADMIN)
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.lessonService.remove(id);
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR,Role.SUPERADMIN, Role.TEACHER)
+  remove(
+    @CurrentUser() user: {id:number, role:Role},
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.lessonService.remove(user, id);
   }
 
 }

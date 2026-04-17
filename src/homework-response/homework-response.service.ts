@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateHomeworkResponseDto } from './dto/create-homework-response.dto';
 import { UpdateHomeworkResponseDto } from './dto/update-homework-response.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { HomeworkStatus, Role } from '@prisma/client';
 
 @Injectable()
@@ -161,5 +161,31 @@ export class HomeworkResponseService {
 
     return { success: true, data: missedStudents }
   }
-  
+
+  // UYGA VAZIFA UCHUN KUTAYOTGAN JAVOBLAR (Bajarilgan, lekin baholanmagan yoki baholangan)
+  async findResponsesByHomework(homeworkId: number, user: { id: number; role: Role }) {
+    const homework = await this.prisma.homework.findUnique({
+      where: { id: homeworkId },
+      include: { lesson: { include: { group: true } } }
+    })
+    if (!homework) throw new NotFoundException("Homework not found.")
+
+    // Teacher o'z guruhimi tekshir (ADMIN/SUPERADMIN uchun bu tekshiruv shart emas)
+    if (user.role === Role.TEACHER) {
+      const teacherGroup = await this.prisma.group.findFirst({
+        where: { id: homework.lesson.groupId, teacherId: user.id }
+      })
+      if (!teacherGroup) throw new ForbiddenException("Bu guruh sizga tegishli emas.")
+    }
+
+    const responses = await this.prisma.homeworkResponse.findMany({
+      where: { homeworkId },
+      include: {
+        student: { select: { id: true, fullName: true } }
+      },
+      orderBy: { created_at: 'asc' }
+    });
+
+    return { success: true, data: responses };
+  }
 }

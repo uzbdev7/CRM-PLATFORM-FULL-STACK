@@ -2,12 +2,14 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, ParseIntP
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+
 import { Role } from '@prisma/client';
 import { ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
 
 @ApiTags("Attendance")
 @ApiCookieAuth("access_token")
@@ -16,9 +18,9 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post("create")
-  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | TEACHER "})
+  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | MANAGEMENT | TEACHER "})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN,Role.ADMINISTRATOR,Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN,Role.ADMINISTRATOR,Role.SUPERADMIN, Role.MANAGEMENT, Role.TEACHER)
   create(
     @Body() createAttendanceDto: CreateAttendanceDto,
     @CurrentUser() user:{id:number, role:Role}  
@@ -26,18 +28,20 @@ export class AttendanceController {
     return this.attendanceService.create(createAttendanceDto, user);
   }
 
-  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | TEACHER "})
+  // [O'ZGARTIRISH]: O'quvchilar o'zlarining davomatini ko'ra olishi uchun STUDENT roli qo'shildi
+  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | MANAGEMENT | TEACHER | STUDENT "})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.MANAGEMENT, Role.TEACHER, Role.STUDENT)
   @Get("all")
   findAll() {
     return this.attendanceService.findAll();
   }
 
   @Get(':lessonId')
-  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | TEACHER "})
+  // [O'ZGARTIRISH]: Dars bo'yicha davomatni ko'rish imkoniyati STUDENT ga ham berildi
+  @ApiOperation({summary:"ADMIN | ADMINISTRATOR | SUPERADMIN | MANAGEMENT | TEACHER | STUDENT "})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.MANAGEMENT, Role.TEACHER, Role.STUDENT)
   findOne(
     @Param('lessonId', ParseIntPipe) lessonId: number,
     @CurrentUser() user: { id: number; role: Role }
@@ -46,7 +50,7 @@ export class AttendanceController {
   }
 
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.MANAGEMENT, Role.TEACHER)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -57,7 +61,7 @@ export class AttendanceController {
   }
 
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.MANAGEMENT, Role.TEACHER)
   @Delete(':id')
   remove(
     @Param('id', ParseIntPipe) id: number,

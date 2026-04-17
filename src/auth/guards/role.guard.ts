@@ -20,9 +20,11 @@ export class RoleGuard implements CanActivate {
 
     // 3. Request dan userni olish (JwtAuthGuard uni req.user ga qoygan)
     const { user } = context.switchToHttp().getRequest();
+    const userRole = String(user?.role || '').trim().toUpperCase();
+    const normalizedRequiredRoles = (requiredRoles || []).map((r) => String(r).trim().toUpperCase());
 
     // 4. User roli kerakli rollar ichida bormi
-    if (!requiredRoles.includes(user.role)) {
+    if (!userRole || !normalizedRequiredRoles.includes(userRole)) {
       throw new ForbiddenException('Sizda bu amalni bajarish uchun ruxsat yo\'q');
     }
 

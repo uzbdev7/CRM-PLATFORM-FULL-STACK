@@ -3,13 +3,13 @@ import { HomeworkService } from './homework.service';
 import { CreateHomeworkDto } from './dto/create-homework.dto';
 import { UpdateHomeworkDto } from './dto/update-homework.dto';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { RoleGuard } from 'src/auth/guards/role.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
 import { Role } from '@prisma/client';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { homeworkFileOptions } from 'src/config/multer.config';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { homeworkFileOptions } from '../config/multer.config';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Homework')
 @ApiCookieAuth("access_token")
@@ -43,9 +43,9 @@ export class HomeworkController {
     return this.homeworkService.create(createHomeworkDto, file, user)
   }
 
-  @ApiOperation({summary:"ADMIN | SUPERADMIN | TEACHER | ADMINISTRATOR"})
+  @ApiOperation({summary:"ADMIN | SUPERADMIN | TEACHER | ADMINISTRATOR | STUDENT"})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER, Role.STUDENT)
   @Get('all')
   findAll(
     @CurrentUser() user: { id: number; role: Role }
@@ -53,9 +53,9 @@ export class HomeworkController {
     return this.homeworkService.findAll(user)
   }
 
-  @ApiOperation({summary:"ADMIN | SUPERADMIN | TEACHER | ADMINISTRATOR"})
+  @ApiOperation({summary:"ADMIN | SUPERADMIN | TEACHER | ADMINISTRATOR | STUDENT"})
   @UseGuards(JwtAuthGuard, RoleGuard)
-  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER)
+  @Roles(Role.ADMIN, Role.ADMINISTRATOR, Role.SUPERADMIN, Role.TEACHER, Role.STUDENT)
   @Get(':lessonId')
   findOne(
     @Param('lessonId', ParseIntPipe) lessonId: number,

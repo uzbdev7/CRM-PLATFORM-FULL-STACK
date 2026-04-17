@@ -1,7 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateLessonVideoDto } from './dto/create-lesson-video.dto';
 import { UpdateLessonVideoDto } from './dto/update-lesson-video.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Role } from '@prisma/client';
 
 @Injectable()
@@ -19,6 +19,27 @@ export class LessonVideoService {
       where: { id: createLessonVideoDto.lessonId }
     })
     if (!lesson) throw new NotFoundException("Lesson not found.")
+
+    if (user.role === Role.TEACHER) {
+      const teacherGroup = await this.prisma.group.findFirst({
+        where: { id: lesson.groupId, teacherId: user.id }
+      })
+      if (!teacherGroup) throw new ForbiddenException("Bu guruh sizga tegishli emas.")
+    }
+
+    const attendanceExists = await this.prisma.attendance.findFirst({
+      where: { lessonId: createLessonVideoDto.lessonId }
+    })
+    if (!attendanceExists) {
+      throw new BadRequestException("Avval darsga yo'qlama qiling, keyin video yuklang.")
+    }
+
+    const existingVideo = await this.prisma.lessonVideo.findFirst({
+      where: { lessonId: createLessonVideoDto.lessonId }
+    })
+    if (existingVideo) {
+      throw new ConflictException("Bu mavzu uchun video allaqachon yuklangan.")
+    }
 
     const video = await this.prisma.lessonVideo.create({
       data: {

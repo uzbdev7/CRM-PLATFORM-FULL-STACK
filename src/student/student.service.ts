@@ -1,14 +1,14 @@
-import { ConflictException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, InternalServerErrorException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginStudentDto } from './dto/Loginstudent.dto';
 import * as bcrypt from 'bcrypt'
 import { Response } from 'express';
-import { sendWelcomeMail } from 'src/helpers/mail.helper';
 import { MailerService } from '@nestjs-modules/mailer';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { Role } from '@prisma/client';
 import { UpdateStudentDto } from './dto/update-student.dto';
+import { PrismaService } from '../prisma/prisma.service';
+import { sendWelcomeMail } from '../helpers/mail.helper';
 
 
 @Injectable()
@@ -23,19 +23,26 @@ export class StudentService {
     const hashedPassword = await bcrypt.hash(dto.password, 10)
     const photoPath = photo ? `/uploads/photos/${photo.filename}` : null
 
-    const student = await this.prisma.student.create({
-      data: {
-        fullName: dto.fullName,
-        email: dto.email,
-        password: hashedPassword,
-        birt_date: new Date(dto.birt_date),
-        photo: photoPath,
-      },
-    });
+    try {
+      const student = await this.prisma.student.create({
+        data: {
+          fullName: dto.fullName,
+          email: dto.email,
+          password: hashedPassword,
+          birt_date: new Date(dto.birt_date),
+          photo: photoPath,
+        },
+      });
 
-    await sendWelcomeMail(this.mailerService, dto.email, dto.fullName, dto.password);
+      await sendWelcomeMail(this.mailerService, dto.email, dto.fullName, dto.password);
 
-    return { message: 'Student yaratildi', studentId: student.id, };
+      return { message: 'Student yaratildi', studentId: student.id, };
+    } catch (error: any) {
+      if (error?.code === 'P2002' && error?.meta?.target?.includes('email')) {
+        throw new ConflictException(`Bu email manzili allaqachon ro'yxatdan o'tgan: ${dto.email}`);
+      }
+      throw error;
+    }
   }
 
   // homework.service.ts
@@ -72,7 +79,19 @@ export class StudentService {
         },
         homeworkResponses: {
           where: { studentId: student.id },
-          select: { id: true, status: true, file: true }
+          select: { id: true, status: true, file: true, title: true, created_at: true }
+        },
+        homeworkResults: {
+          where: { studentId: student.id },
+          select: {
+            id: true,
+            score: true,
+            status: true,
+            title: true,
+            created_at: true,
+            teacherId: true,
+            file: true,
+          }
         }
       }
     })
@@ -87,8 +106,25 @@ export class StudentService {
 
     if (!user) throw new UnauthorizedException('Email yoki parol xato');
 
-    const isMatch = await bcrypt.compare(dto.password, user.password);
+    const inputPassword = (dto.password || '').trim();
+    const storedPassword = (user.password || '').trim();
+    const normalizedHash = storedPassword.startsWith('$2y$')
+      ? `$2b$${storedPassword.slice(4)}`
+      : storedPassword;
+
+    const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(normalizedHash);
+    const isMatch = isBcryptHash
+      ? await bcrypt.compare(inputPassword, normalizedHash)
+      : inputPassword === storedPassword;
+
     if (!isMatch) throw new UnauthorizedException('Email yoki parol xato');
+
+    if (storedPassword.startsWith('$2y$')) {
+      await this.prisma.student.update({
+        where: { id: user.id },
+        data: { password: normalizedHash },
+      });
+    }
 
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret) throw new InternalServerErrorException('JWT secret not configured');
@@ -110,8 +146,14 @@ export class StudentService {
       role: "STUDENT",
       token,
       userId: user.id,
-
-
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        birt_date: user.birt_date,
+        photo: user.photo,
+        role: "STUDENT"
+      }
     });
   }
 
@@ -122,20 +164,35 @@ export class StudentService {
     return students.map(({ password, ...s }) => s);
   }
 
-  async getById(id: number) {
+  async getById(id: number, user?: { id: number; role: Role }) {
+    if (user?.role === Role.STUDENT && Number(user.id) !== Number(id)) {
+      throw new ForbiddenException("Bu ma'lumot sizga tegishli emas.");
+    }
+
     const student = await this.prisma.student.findUnique({
       where: { id }
     })
 
     if (!student) throw new NotFoundException("Student not found")
 
+    const { password, ...safeStudent } = student;
+
     return {
       success: true,
-      data: student
+      data: safeStudent
     }
   }
 
-  async updateStudentById(id: number, payload: UpdateStudentDto, photo?: Express.Multer.File) {
+  async updateStudentById(
+    id: number,
+    payload: UpdateStudentDto,
+    photo?: Express.Multer.File,
+    user?: { id: number; role: Role }
+  ) {
+
+    if (user?.role === Role.STUDENT && Number(user.id) !== Number(id)) {
+      throw new ForbiddenException("Bu profil sizga tegishli emas.");
+    }
 
     const teacher = await this.prisma.student.findUnique({
       where: { id }
@@ -144,7 +201,7 @@ export class StudentService {
 
     if (!teacher) throw new NotFoundException("Student not found.");
 
-    const photoPath = photo && photo.originalname ? photo.path : undefined;
+    const photoPath = photo?.filename ? `/uploads/photos/${photo.filename}` : undefined;
 
     const cleanPayload = Object.fromEntries(
       Object.entries(payload).filter(([_, v]) =>
@@ -173,6 +230,14 @@ export class StudentService {
       cleanPayload.password = await bcrypt.hash(cleanPayload.password, 10);
     } else {
       cleanPayload.password = teacher.password;
+    }
+
+    if (cleanPayload.birt_date) {
+      const parsedDate = new Date(cleanPayload.birt_date as string);
+      if (Number.isNaN(parsedDate.getTime())) {
+        throw new BadRequestException("birt_date noto'g'ri formatda. YYYY-MM-DD yuboring.");
+      }
+      cleanPayload.birt_date = parsedDate;
     }
 
     const updated = await this.prisma.student.update({

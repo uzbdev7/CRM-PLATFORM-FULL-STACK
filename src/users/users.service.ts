@@ -1,13 +1,15 @@
 import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+
 import { JwtService } from '@nestjs/jwt';
 import { MailerService } from '@nestjs-modules/mailer';
 import * as bcrypt from 'bcrypt';
 import type { Response } from 'express';
 import { CreateUserDto } from './dto/CreateUser.dto';
 import { LoginUserDto } from './dto/LoginUser.dto';
-import { sendWelcomeMail } from 'src/helpers/mail.helper'; 
+
 import { Role } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { sendWelcomeMail } from '../helpers/mail.helper';
 
 @Injectable()
 export class UsersService {
@@ -48,8 +50,25 @@ async register(dto: CreateUserDto, photo?: Express.Multer.File) {
     });
     if (!user) throw new UnauthorizedException('Email yoki parol xato');
 
-    const isMatch = await bcrypt.compare(dto.password, user.password);
+    const inputPassword = (dto.password || '').trim();
+    const storedPassword = (user.password || '').trim();
+    const normalizedHash = storedPassword.startsWith('$2y$')
+      ? `$2b$${storedPassword.slice(4)}`
+      : storedPassword;
+
+    const isBcryptHash = /^\$2[aby]\$\d{2}\$/.test(normalizedHash);
+    const isMatch = isBcryptHash
+      ? await bcrypt.compare(inputPassword, normalizedHash)
+      : inputPassword === storedPassword;
+
     if (!isMatch) throw new UnauthorizedException('Email yoki parol xato');
+
+    if (storedPassword.startsWith('$2y$')) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: normalizedHash },
+      });
+    }
 
     const token = this.jwtService.sign(
       { id: user.id, email: user.email, role: user.role },

@@ -2,16 +2,18 @@ import { Controller, Post, Body, HttpCode, HttpStatus, Res, UseGuards, UseInterc
 import { StudentService } from './student.service';
 import { LoginStudentDto } from './dto/Loginstudent.dto';
 import { ApiBody, ApiConsumes, ApiCookieAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import type { Response } from 'express';
-import { RoleGuard } from 'src/auth/guards/role.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
+
 import { Role } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { multerOptions } from 'src/config/multer.config';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RoleGuard } from '../auth/guards/role.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { multerOptions } from '../config/multer.config';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
 
 @ApiCookieAuth("access_token")
 @Controller('student')
@@ -60,18 +62,21 @@ export class StudentController {
     }
 
 
-    @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT"})
+    @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT | STUDENT(self)"})
     @ApiResponse({ status: 200, description: 'Bitta talaba ma\'lumotlari.' })
     @UseGuards(JwtAuthGuard, RoleGuard)
-    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR)
+    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.STUDENT)
     @Get(":id")
-    getById(@Param('id', ParseIntPipe) id:number){
-      return this.studentService.getById(id)
+    getById(
+      @Param('id', ParseIntPipe) id:number,
+      @CurrentUser() user: { id: number; role: Role }
+    ){
+      return this.studentService.getById(id, user)
     }
 
-    @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT"})
+    @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT | STUDENT(self)"})
     @UseGuards(JwtAuthGuard, RoleGuard)
-    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR)
+    @Roles(Role.ADMIN, Role.MANAGEMENT, Role.SUPERADMIN, Role.ADMINISTRATOR, Role.STUDENT)
     @Patch('update/:id')
     @ApiConsumes('multipart/form-data')
     @ApiBody({
@@ -90,10 +95,11 @@ export class StudentController {
     updateTeacherById(
       @Param('id', ParseIntPipe) id:number,
       @Body() payload:UpdateStudentDto,
+      @CurrentUser() user: { id: number; role: Role },
       @UploadedFile() photo?: Express.Multer.File
     ){
 
-      return this.studentService.updateStudentById(id, payload, photo)
+      return this.studentService.updateStudentById(id, payload, photo, user)
     }
 
     @ApiOperation({summary:"ADMIN | SUPERADMIN | ADMINISTRATOR | MANAGEMENT"})
